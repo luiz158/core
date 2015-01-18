@@ -1,0 +1,22 @@
+mkdir core3
+cd core3
+git clone https://github.com/forge/core
+mv core forge
+clone git@github.com:luiz158/core.git
+cd core/
+git pull https://github.com/forge/core
+cd ..
+cd forge
+rm -rf .git
+rsync -av ..progress ../core/.git ./
+git status
+git add .
+git status
+git commit -am 'atualizado com o forge central...'
+git status
+git push
+history > history-atualizacao.txt
+git add history-atualizacao.txt
+git commit -am 'history da atualizacao...'
+git push
+
