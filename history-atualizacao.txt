@@ -20,3 +20,11 @@ git add history-atualizacao.txt
 git commit -am 'history da atualizacao...'
 git push
 
+git clone git@github.com:luiz158/core
+cd core
+git pull https://github.com/forge/core
+git push
+git add atualizar.txt
+git commit -am 'como atualizar .....'
+git push
+
