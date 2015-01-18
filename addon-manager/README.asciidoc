@@ -1,0 +1,85 @@
+== Addon Manager
+:idprefix: id_ 
+
+This addon provides *standalone* functionality, and *exports services* for use in other addons. The addon-manager 
+provides services and ui-commands to perform addon installation and removal tasks.
+
+=== Depends on
+
+[options="header"]
+|===
+|Addon |Exported |Optional
+
+|addon-manager-spi
+|yes
+|no
+
+|projects
+|no
+|yes
+
+|ui
+|no
+|yes
+
+|org.jboss.forge.furnace.container:cdi
+|no
+|no
+
+|===
+
+== Setup
+
+This addon requires the following installation steps.
+
+=== Add configuration to pom.xml 
+
+To use this addon, you must add it as a dependency in the *pom.xml* of your `forge-addon` classified artifact:
+
+[source,xml]
+----
+<dependency>
+   <groupId>org.jboss.forge.addon</groupId>
+   <artifactId>addon-manager</artifactId>
+   <classifier>forge-addon</classifier>
+   <version>${version}</version>
+</dependency>
+----
+
+== Features
+
+Installation and removal of addons through UI commands::
+ The addon-manager addon provides several ui-command implementations to aid with the installation and removal of 
+ addons from one or more repositories through a user interface.
+
+ * *Install an Addon* - Installs a single addon from Maven 
+ * *Remove Addon(s)* - Removes one or more installed addons.
+ * *Build and Install an Addon* (Requires project) - Builds the current selected project and installs it as an addon.
+ * *Build and Install an Addon from Git* - Builds a git repository and installs the specified coordinate as an addon.
++
+More installation methods will become available as they are developed/contributed, but the addon-manager does not
+currently support installation directly from Git repositories.
+ 
+Installation and removal of addons through AddonManager service::
+ The addon-manager addon provides the `AddonManager` service for use in addons which intend to perform installation
+and removal of addons programatically.
++
+[source,java]
+----
+@Inject private AddonManager manager;
+...
+InstallRequest request = manager.install(AddonId.from("org.example:example", "0.0.1-SNAPSHOT"));
+request.perform();
+----
++
+[TIP] 
+====
+If your addon uses a container that does not support "@Inject" annotations, services such as the `AddonManager` may also be 
+accessed via the `AddonRegistry`:
+
+----
+AddonRegistry registry = ...
+Imported<AddonManager> imported = registry.getServices(AddonManager.class);
+AddonManager manager = imported.get();
+----
+==== 

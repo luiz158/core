@@ -1,0 +1,308 @@
+== projects
+:idprefix: id_ 
+
+This addon provides *standalone* functionality and *exports services* for use in other addons. The projects addon allows for project creation, modification and comprehension. It also provides integration points for build tools, dependency management systems, and source file manipulation.
+
+The projects addon also supplies several commands in the `Project:*` category, such as:
+
+* Project: New
+* Project: Add Dependencies
+* Project: Add Managed Dependencies
+* Project: Remove Dependencies
+* Project: Remove Managed Dependencies
+
+=== Depends on
+
+[options="header"]
+|===
+|Addon |Exported |Optional
+
+|convert
+|no
+|no
+
+|dependencies
+|yes
+|no
+
+|facets
+|yes
+|no
+
+|resources
+|yes
+|no
+
+|ui
+|yes
+|no
+
+|shell-spi
+|no
+|yes
+
+|org.jboss.forge.furnace.container:cdi
+|no
+|no
+
+|===
+
+== Setup
+
+This Addon requires the following installation steps.
+
+=== Add configuration to pom.xml 
+
+To use this addon, you must add it as a dependency in the *pom.xml* of your `forge-addon` classified artifact:
+
+[source,xml] 
+----
+<dependency>
+   <groupId>org.jboss.forge.addon</groupId>
+   <artifactId>projects</artifactId>
+   <classifier>forge-addon</classifier>
+   <version>${version}</version>
+</dependency>
+----      
+== Features
+
+
+ProjectFactory service for simple project location and creation::
+ The `ProjectFactory` provides an entry-point API for all Project operations: both creation of new, and location and modification of existing projects:
++
+[source,java]
+----
+@Inject
+private ProjectFactory factory;
+----
++
+*'Project location'*
++
+The project location API enables you to find existing projects that already exist on the filesystem.
++
+[source,java]
+----
+FileResource<?> file = ...
+Project project = factory.findProject(file);
+---- 
++
+*'Project creation'*
++
+The project creation API allows for creating of projects that meet certain pre-determined critera via specification of required facets at creation time.
++
+[source,java]
+----
+DirectoryResource targetDirectory = ...
+Project project = factory.createProject(targetDirectory, DependencyFacet.class, PackagingFacet.class, ...);
+---- 
++
+[TIP] 
+====
+If your addon uses a container that does not support "@Inject" annotations, services such as the `ProjectFactory` may also be 
+accessed via the `AddonRegistry`:
+
+----
+AddonRegistry registry = ...
+Imported<ProjectFactory> imported = registry.getServices(ProjectFactory.class);
+ProjectFactory factory = imported.get();
+----
+==== 
+
+
+Modular functionality with ProjectFacet API::
+The projects addon provides a singularly simple API for project interaction, while allowing for extension via `Facet` implementations which may be installed and removed as needed. `ProjectFacet` types may be provided or implemented via other installed addons.
++
+[options="header"]
+|===
+|Facet type |Description |Provided by addons
+
+|DependencyFacet |Grants access to the project dependencies and dependency-management|gradle, maven
+|MetadataFacet |Grants access to the project name and top-level package |gradle, maven
+|PackagingFacet |Grants access to the project packaging type, build methods, and build output artifact |gradle, maven
+|ResourcesFacet |Grants access to project source files|gradle, maven
+|WebResourcesFacet |Grants access to project source files|gradle, maven
+
+|===
+
+Create a custom ProjectFacet type::
+Additional custom `ProjectFacet` types may be implemented by your addon simply by implementing the `ProjectFacet` interface.
++
+[source,java]
+----
+public class ProjectFacetA extends AbstractFacet<Project> implements ProjectFacet {
+
+   @Override
+   public boolean install() {
+      return true;
+   }
+
+   @Override
+   public boolean isInstalled() {
+      return true;
+   }
+}
+----
+
+Simple facet prerequisite management::
+Since `Facet` implementations are designed for re-use, the projects addon API provides the `@FacetConstraint` annotation, for quickly defining dependencies between facet implementations. The default constraint type is `REQUIRED`.
++
+[source,java]
+----
+public class ProjectFacetA extends AbstractFacet<Project> implements ProjectFacet {
+   ...
+}
+
+@FacetConstraint({ProjectFacetA.class})
+public class ProjectFacetB extends AbstractFacet<Project> implements ProjectFacet {
+   ...
+}
+
+@FacetConstraints({
+   @FacetConstraint({ProjectFacetA.class}),
+   @FacetConstraint(value={ProjectFacetX.class}, type=OPTIONAL)
+})
+public class ProjectFacetB extends AbstractFacet<Project> implements ProjectFacet {
+   ...
+}
+----
++
+This type of dependency specification is equivalent to the following (more verbose) manual configuration in most cases, but also ensures proper Facet registration and installation ordering, which the code below does not:
++
+[source,java]
+----
+public class ProjectFacetB extends AbstractFacet<Project> implements ProjectFacet {
+
+   @Inject private FacetFactory factory;
+
+   @Override
+   public boolean install() {
+      ProjectFacetA facetA = factory.install(getFaceted(), ProjectFacetA.class);
+      return facetA.isInstalled();
+   }   
+
+   @Override
+   public boolean isInstalled() {
+      return getFaceted().hasFacet(ProjectFacetA.class);
+   }  
+}
+----
++
+In summary, the `FacetFactory` and `ProjectFactory` services will recursively check for and install missing prerequisite `ProjectFacet` types, before proceeding to install the requsted facet type. This allows for very simple dependency management, and avoids many opportunities for `NullPointerException`.
+
+ProjectProvider services for custom project types::
+
+If you wish to implement a custom project type in your addon, you will need to use the `ProjectProvider` service API. Each time a method in the `ProjectFactory` is called, all available `ProjectProvider` instances are queried in priority order until a valid project result is found.
++
+`ProjectProvider` implementations must also publish the `ProvidedProjectFacet` types that they provide. This is done via the `getProvidedFacetTypes()` method. `ProvidedProjectFacet` implementations may only be installed by the `ProjectProvider` implementation that produces them. They will not be installed automatically by the `ProjectFactory`. 
++
+[source,java]
+----
+public class CustomProjectProvider implements ProjectProvider {
+
+   @Inject
+   private FacetFactory factory;
+
+   @Override
+   public String getType() {
+      return "my-custom-build-system"
+   }
+
+   @Override
+   public Project createProject(final DirectoryResource dir) {
+      Project project = new CustomProject(dir);
+
+      try {
+         factory.install(project, CustomProvidedProjectFacet.class);
+      }
+      catch (RuntimeException e) {
+         throw new IllegalStateException("Could not install Custom functionality into Project located at ["
+                  + dir.getFullyQualifiedName() + "]");
+      }
+
+      return project;
+   }
+
+   @Override
+   public boolean containsProject(final DirectoryResource dir) {
+      return dir.getChild("custom-project-config.txt").exists();
+   }
+
+   @Override
+   public Iterable<Class<? extends ProvidedProjectFacet>> getProvidedFacetTypes() {
+      return Arrays.asList(CustomProvidedProjectFacet.class);
+   }
+
+   @Override
+   public int priority()
+      return 0;
+   }
+}
+----
+
+ProjectListener services for project events::
+If your addon would like to receive notifications when new projects are created, simply implement the `ProjectListener` service interface. When a new project is created, the `ProjectFactory` will retrieve all available `ProjectListener` instances, and invoke the `.projectCreated(Project project)` method.
++
+[source,java]
+----
+class CustomProjectListener implements ProjectListener {
+
+   @Override
+   public void projectCreated(Project project) {
+      // handle the project
+   }
+}
+----
++
+TIP: `ProjectListener` instances may also be registered directly via the `ProjectFactory.addProjectListener(ProjectListener listener)` method
+
+(Optional) ui addon integration::
+ The projects addon supplies a `UIWizard` implementation called "New Project". This, as the name suggests, is used for creating new projects from a UI provider such as Eclipse, IntelliJ, NetBeans, or the command line shell (CLI).
++
+Additional project types can be supplied to the "New Project" wizard via extension of the `ProjectType` service interface. New implementations are automatically detected by the "New Project" wizard when it is executed.
++
+[source,java]
+----
+public class CustomProjectType implements ProjectType {
+
+   @Override
+   public String getType() {
+      return "Custom - With Mustard";
+   }
+
+   @Override
+   public Class<? extends UIWizardStep> getSetupFlow() {
+      return CustomWithMustardWizard.class;
+   }
+
+   @Override
+   public Iterable<Class<? extends ProjectFacet>> getRequiredFacets() {
+      List<Class<? extends ProjectFacet>> result = new ArrayList<Class<? extends ProjectFacet>>();
+      result.add(ProjectFacetA.class);
+      result.add(ProjectFacetB.class);
+      return result;
+   }
+
+   @Override
+   public int priority() {
+      return 0;
+   }
+}
+----
++
+Notice that our custom project type is able to specify additional `UIWizard` steps that must be completed before the project is created, and may also provide a set of Facet types which must be installed before the given `UIWizard` step is executed.
+
+
+Ready for use in tests::
+ To facilitate testing, or other situations where temporary projects may be required, the `ProjectFactory` also provides a method for temporary project creation. `Project` instances created in this way are placed in the system temp directory, and can be deleted at will; otherwise, they will eventually be deleted by the operating system.
++
+[source,java]
+----
+@Inject 
+private ProjectFactory factory;
+...
+Project temp = factory.createTempProject();
+----
+
+
+Consistent programming experience::
+ Because the Project API provides an abstract model for interacting with existing and creating new projects, it is used in a number of addons and should be considered the standard approach for project manipulation.

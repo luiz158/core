@@ -1,0 +1,60 @@
+== templates
+:idprefix: id_ 
+This addon provides *standalone* functionality, and *exports services* for use in other addons. The templates addon allows a template to be processed by replacing the variables with the provided parameters.
+
+The addon supports Freemarker as the default template engine out of the box, but other template engines can also be supported through implementing the interfaces in the templates-spi addon.
+        
+=== Depends on
+[options="header"]
+|===
+|Addon |Exported |Optional
+|resources
+|yes
+|no
+|projects
+|yes
+|no
+|templates-spi
+|yes
+|no
+|===
+
+== Setup
+This Addon requires the following installation steps.
+
+=== Add configuration to pom.xml
+To use this addon, you must add it as a dependency in the *pom.xml* of your `forge-addon` classified artifact:
+(Make sure the dependency is put all the way to the left, and uses 3 spaces for indentation of GAV)
+[source,xml]
+----
+<dependency>
+   <groupId>org.jboss.forge.addon.templates</groupId>
+   <artifactId>templates</artifactId>
+   <classifier>forge-addon</classifier>
+   <version>${version}</version>
+</dependency>
+----
+== Features
+TemplateFactory for template creation:: 
+Allows a Template to be created. Templates will replace its variables with the provided parameters and control logic.
++
+[source,java]
+----
+@Inject private TemplateFactory factory;
+...
+FileResource<?> resource = ...; // A file resource containing "Hello ${name}"
+Template template = factory.create(resource, FreemarkerTemplate.class); // Create a freemarker template for the given Resource
+Map<String,Object> params = new HashMap<String,Object>(); //Could also be a POJO also.
+params.put("name", "JBoss Forge");
+String output = template.process(params); // should return "Hello JBoss Forge". 
+----
++
+[TIP] 
+====
+If your addon uses a container that does not support "@Inject" annotations, services such as the `TemplateFactory` may also be 
+accessed via the `AddonRegistry`:
+----
+Imported<TemplateFactory> imported = addonRegistry.getServices(TemplateProcessorFactory.class);
+TemplateFactory factory = imported.get();
+----
+==== 

@@ -1,0 +1,91 @@
+== parser-java
+:idprefix: id_
+
+This addon *exports services* for use in other addons. The Java parser addon provides APIs and services for parsing Java
+types including classes, enums, interfaces, annotations, and package-info types.
+
+=== Depends on
+
+[options="header"]
+|===
+|Addon |Exported |Optional
+
+|resources
+|no
+|yes
+
+
+|projects
+|no
+|yes
+
+|ui-spi
+|no
+|yes
+
+|ui
+|no
+|no
+
+|org.jboss.forge.furnace.container:cdi
+|no
+|no
+
+|===
+
+== Setup
+
+This Addon requires the following installation steps.
+
+=== Add configuration to pom.xml
+
+To use this addon, you must add it as a dependency in the *pom.xml* of your `forge-addon` classified artifact:
+
+[source,xml]
+----
+<dependency>
+   <groupId>org.jboss.forge.addon</groupId>
+   <artifactId>parser-java</artifactId>
+   <classifier>forge-addon</classifier>
+   <version>${version}</version>
+</dependency>
+----
+
+== Features
+
+Roaster for java source parsing and generation::
+Roaster allows for parsing and generation of Java sources via a type-safe and fluent API.
++
+[source,java]
+----
+JavaClassSource<?> myClass = Roaster.parse(JavaClassSource.class, "public class MyClass{}");
+----
+====
+
+(Optional) projects addon integration::
+When the projects addon is installed, several `ProjectFacet` implementations will be retrievable from appropriately configured projects that include java source code.
++
+* *JavaCompilerFacet* - used to control the project Java compiler version.
+* *JavaSourceFacet* - used to manipulate project Java source files.
++
+[source,java]
+----
+Project project = ...
+JavaSourceFacet facet = project.getFacet(JavaSourceFacet.class);
+----
+
+(Optional) resources addon integration::
+When the resources addon is installed, additional resources types for dealing with java types, methods and fields will be
+available for use via the `ResourceFactory`.
++
+[source,java]
+----
+ResourceFactory factory = ...
+JavaResource resource = (JavaResource) factory.create(new File(".../MyJavaClass.java"));
+----
++
+`JavaResource` types also expose `JavaFieldResource` and `JavaMethodResource` via `JavaResource.listResources()`.
+
+(Optional) ui-spi addon integration::
+When the ui-spi addon is installed, the _InputType.JAVA_CLASS_PICKER_ input type hint will be registered for UIInput<JavaResource>
+instances.

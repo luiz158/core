@@ -20,6 +20,8 @@
 
 @echo off
 
+set ADDON_DIR=
+
 @REM set %USERHOME% to equivalent of $HOME
 if not "%USERHOME%" == "" goto OkUserhome
 set "USERHOME=%USERPROFILE%"
@@ -69,10 +71,10 @@ for /f "delims=. tokens=1-3" %%v in ("%JAVAVER%") do (
    set JAVAVER_MINOR=%%w
 )
 
-if %JAVAVER_MINOR% geq 6 goto chkFHome
+if %JAVAVER_MINOR% geq 7 goto chkFHome
 
 echo.
-echo A Java 1.6 or higher JRE is required to run Forge. "%JAVA_HOME%\bin\java.exe" is version %JAVAVER%
+echo A Java 1.7 or higher JRE is required to run Forge. "%JAVA_HOME%\bin\java.exe" is version %JAVAVER%
 echo.
 goto error
 
@@ -109,17 +111,32 @@ echo.
 goto error
 @REM ==== END VALIDATION ====
 
-@REM Initializing the argument line and the plugin directory if any
+@REM Initializing the argument line
 :init
+setlocal enableextensions enabledelayedexpansion
+echo Using Forge at %FORGE_HOME%
 set FORGE_CMD_LINE_ARGS=
-set FORGE_PLUGIN_DIR=
 set FORGE_DEBUG_ARGS=
+
+if "%1"=="" goto initArgs
+
+set "args=%*"
+set "args=%args:,=:comma:%"
+set "args=%args:;=:semicolon:%"
+
+for %%x in (%args%) do (
+    set "arg=%%~x"
+    set "arg=!arg::comma:=,!"
+    set "arg=!arg::semicolon:=;!"
+    if "!arg!"=="--debug" set FORGE_DEBUG_ARGS=-Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=8000
+    if "!arg!"=="-d" set FORGE_DEBUG_ARGS=-Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=8000
+    set "FORGE_CMD_LINE_ARGS=!FORGE_CMD_LINE_ARGS! "!arg!""
+)
+
 :initArgs
+setlocal enableextensions enabledelayedexpansion
 if %1a==a goto endInit
-set FORGE_CMD_LINE_ARGS=%FORGE_CMD_LINE_ARGS% %1
-if "%FORGE_PLUGIN_DIR%"=="-pluginDir" set FORGE_PLUGIN_DIR=%1
-if "%1"=="-pluginDir" set FORGE_PLUGIN_DIR=%1
-if "%1"=="--debug" set FORGE_DEBUG_ARGS=-Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=8000
+
 shift
 goto initArgs
 @REM Reaching here means variables are defined and arguments have been captured
@@ -130,27 +147,22 @@ SET FORGE_JAVA_EXE="%JAVA_HOME%\bin\java.exe"
 @REM -- 4NT shell
 if "%@eval[2+2]" == "4" goto 4NTCWJars
 
-set JBOSS_MODULES="%FORGE_HOME%\jboss-modules.jar"
 goto runForge
 
 @REM Start Forge
 :runForge
-set FORGE_MAIN_CLASS=org.jboss.forge.shell.Bootstrap
-%FORGE_JAVA_EXE% %FORGE_DEBUG_ARGS% %FORGE_OPTS% "-Dforge.home=%FORGE_HOME%" -Dforge.shell.colorEnabled=true -jar %JBOSS_MODULES% -modulepath "%FORGE_HOME%\modules;%USERHOME%\.forge\plugins;%FORGE_PLUGIN_DIR%" org.jboss.forge %FORGE_CMD_LINE_ARGS%
+
+if exist "%FORGE_HOME%\addons" set ADDONS_DIR=--immutableAddonDir "%FORGE_HOME%\addons" 
+set FORGE_MAIN_CLASS=org.jboss.forge.bootstrap.Bootstrap
+%FORGE_JAVA_EXE% %FORGE_DEBUG_ARGS% %FORGE_OPTS% "-Dforge.standalone=true" "-Dforge.home=%FORGE_HOME%" ^
+   -cp ".;%FORGE_HOME%\lib\*" %FORGE_MAIN_CLASS% %FORGE_CMD_LINE_ARGS% %ADDONS_DIR%
 if ERRORLEVEL 1 goto error
-IF EXIST "%FORGE_HOME%\.update\" (
-	rmdir /S/Q "%FORGE_HOME%\modules"
-	xcopy /S /Q /Y "%FORGE_HOME%\.update" "%FORGE_HOME%\" > NUL
-	rmdir /S/Q "%FORGE_HOME%\.update"
-	goto runForge
-)
 goto end
 
 :error
 if "%OS%"=="Windows_NT" @endlocal
 if "%OS%"=="WINNT" @endlocal
 set ERROR_CODE=1
-
 
 :end
 @REM set local scope for the variables with windows NT shell

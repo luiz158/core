@@ -1,0 +1,138 @@
+== Convert
+:idprefix: id_ 
+
+This addon *exports services* for use in other addons. The convert addon enables the creation and lookup of 
+static and dynamic converters for general purpose use.
+
+=== Depends on
+
+[options="header"]
+|===
+|Addon |Exported |Optional
+
+|org.jboss.forge.furnace.container:cdi
+|No
+|No
+
+|===
+
+== Setup
+
+This addon requires the following installation steps.
+
+=== Add configuration to pom.xml 
+
+To use this addon, you must add it as a dependency in the *pom.xml* of your `forge-addon` classified artifact:
+
+[source,xml]
+----
+<dependency>
+   <groupId>org.jboss.forge.addon</groupId>
+   <artifactId>convert</artifactId>
+   <classifier>forge-addon</classifier>
+   <version>${version}</version>
+</dependency>
+----
+
+== Features
+
+ConverterFactory service for converter creation::
+The `ConverterFactory` is used for creating both generic and specific converter instances for specified types. When creating
+converters, the factory will select the most appropriate converter type for the specified type arguments.
++
+[source,java]
+----
+@Inject 
+private ConverterFactory factory;
+...
+Converter<String, Integer> converter = factory.create(String.class, Integer.class);
+----
++
+[TIP] 
+====
+If your addon uses a container that does not support "@Inject" annotations, services such as the `ConverterFactory` may also be 
+accessed via the `AddonRegistry`:
+
+----
+AddonRegistry registry = ...
+Imported<ConverterFactory> imported = registry.getServices(ConverterFactory.class);
+ConverterFactory factory = imported.get();
+----
+
+Additionally, you may directly inject typed converters:
+----
+@Inject Converter<SOURCE,TARGET> converter;
+----
+====
+Converter Resolution::
+By default, the Converter API will automatically attempt to find the assigned converter by doing the following checks:
+
+- Check if a custom converter was registered (see next section);
+* If no custom converter is found, the following checks are made:
+** Given a source type and a target type, check if the target type has a constructor with only the source type as a parameter. eg: public static MyClass valueOf(String str){...}
+** Given a source type and a target type check if the target type has a static method valueOf receiving the source type as a parameter. eg: public static MyClass valueOf(String str){...}
+- If converter resolution fails, a ConverterNotFoundException is thrown.
+
+====
+Custom converters::
+The convert API can be extended to register converters for types that are not supported by default. This is a two 
+step process involving creation of a new type that extends from `Converter`, and of a `ConverterGenerator`. 
+These custom converters will be made automatically available to other addons that depend on the convert addon.
++
+[source,java]
+----
+public class Thing {
+   private Object value;
+   
+   // getters and setters
+}
+----
++
+Implement the `Converter` interface:
++
+[source,java]
+----
+public class ThingConverter extends AbstractConverter<Object, Thing> implements Converter<Object, Thing>
+{
+   public ThingConverter()
+   {
+      super(Object.class, Thing.class);
+   }
+
+   @Override
+   public DirectoryResource convert(Object source)
+   {
+      return new Thing(source);
+   }
+}
+----
++
+Implement a `ConverterGenerator`:
++
+[source,java]
+----
+public class ThingConverterGenerator implements ConverterGenerator
+{
+   @Override
+   public boolean handles(Class<?> source, Class<?> target)
+   {
+      return Thing.class.isAssignableFrom(target);
+   }
+
+   @Override
+   public ThingResourceConverter generateConverter(Class<?> source, Class<?> target)
+   {
+      return new ThingConverter();
+   }
+
+   @Override
+   public Class<ThingResourceConverter> getConverterType()
+   {
+      return DirectoryResourceConverter.class;
+   }
+}
+----
+
+Consistent programming experience::
+ Because the convert API provides a consistent set of interfaces for performing type conversion, it is used in a 
+number of addons and should be considered the standard approach for converting values.
